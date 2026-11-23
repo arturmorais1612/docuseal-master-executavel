@@ -1,0 +1,59 @@
+name: Gerar DocuSeal.exe (Apenas Windows)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Configurar Ruby 3.3 e Node 20
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.3'
+          bundler-cache: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências e compilar frontend
+        shell: cmd
+        run: |
+          call npm install -g yarn
+          call bundle config set --local without "development test"
+          call bundle install
+          call yarn install
+          set RAILS_ENV=production
+          set SECRET_KEY_BASE=build_secret_key_1234567890
+          call bundle exec rails assets:precompile
+
+      - name: Montar pacote portátil Windows e gerar DocuSeal.exe
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path "pacote/app" | Out-Null
+          $itens = Get-ChildItem -Path . -Exclude @("pacote", ".git", ".github", "iniciar_docuseal.bat")
+          Copy-Item -Path $itens -Destination "pacote/app" -Recurse -Force
+          Copy-Item -Path "iniciar_docuseal.bat" -Destination "pacote/" -Force
+
+          $rubyRoot = (Get-Command ruby).Source | Split-Path | Split-Path
+          Copy-Item -Path $rubyRoot -Destination "pacote/ruby" -Recurse -Force
+
+          $7zDir = "C:\Program Files\7-Zip"
+          7z a -t7z -mx=5 pacote.7z .\pacote\*
+          $config = @"
+          ;!@Install@!UTF-8!
+          Title="DocuSeal"
+          RunProgram="iniciar_docuseal.bat"
+          ;!@InstallEnd@!
+          "@
+          Set-Content -Path "config.txt" -Value $config -Encoding UTF8
+          cmd /c copy /b "$7zDir\7z.sfx" + config.txt + pacote.7z DocuSeal.exe
+
+      - name: Publicar DocuSeal.exe
+        uses: actions/upload-artifact@v4
+        with:
+          name: DocuSeal-Windows-EXE
+          path: DocuSeal.exe
