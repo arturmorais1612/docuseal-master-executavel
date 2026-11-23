@@ -25,13 +25,15 @@ jobs:
 
       - name: Instalar dependências e compilar frontend
         shell: pwsh
+        env:
+          COREPACK_ENABLE_DOWNLOAD_PROMPT: "0"
+          RAILS_ENV: "production"
+          SECRET_KEY_BASE: "build_secret_key_1234567890"
         run: |
           corepack enable
           bundle config set --local without "development test"
           bundle install
-          yarn install
-          $env:RAILS_ENV = "production"
-          $env:SECRET_KEY_BASE = "build_secret_key_1234567890"
+          yarn install --ignore-engines
           bundle exec rails assets:precompile
 
       - name: Empacotar aplicativo desktop nativo (DocuSeal.exe)
